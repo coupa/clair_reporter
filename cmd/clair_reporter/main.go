@@ -14,10 +14,36 @@ import (
 )
 
 var f string
+var teamConfigFilePath string
 
 func init() {
 	flag.StringVar(&f, "file-path", "", "path to the JSON report from klar")
+	flag.StringVar(&teamConfigFilePath, "team-path", "", "path to the JSON repository-team mapping")
 	reporter.RegisterFlags()
+}
+
+func loadTeamConfig() (map[string]string, map[string]string, error) {
+	if teamConfigFilePath == "" {
+		return nil, nil, fmt.Errorf("missing path to JSON file, pass --team-path <path to json file>")
+	}
+	teamConfigFile, err := os.Open(teamConfigFilePath)
+	if err != nil {
+		return nil, nil, fmt.Errorf("cannot open file:%s err:%s", teamConfigFilePath, err)
+	}
+	var teamRepositories []struct {
+		Repo     string `json:"repo"`
+		Team     string `json:"team"`
+		Assignee string `json:"assignee"`
+	}
+	jsonDecoder := json.NewDecoder(teamConfigFile)
+	jsonDecoder.Decode(&teamRepositories)
+	repositoryTeams := make(map[string]string)
+	repositoryAssignees := make(map[string]string)
+	for _, tr := range teamRepositories {
+		repositoryTeams[tr.Repo] = tr.Team
+		repositoryAssignees[tr.Repo] = tr.Assignee
+	}
+	return repositoryTeams, repositoryAssignees, nil
 }
 
 func main() {
@@ -27,7 +53,10 @@ func main() {
 		log.Fatalf("You must specify a path to the JSON file, pass --file-path <path to json file>")
 		os.Exit(1)
 	}
-
+	repositoryTeams, repositoryAssignees, err := loadTeamConfig()
+	if err != nil {
+		log.Fatalf("Cannot load team config: %s", err)
+	}
 	reporters, err := makeReporters()
 	if err != nil {
 		log.Fatalf("Cannot create requested reporters: %s", err)
@@ -39,10 +68,10 @@ func main() {
 	}
 	defer file.Close()
 
-	reportClairFindings(file, reporters)
+	reportClairFindings(file, repositoryTeams, repositoryAssignees, reporters)
 }
 
-func reportClairFindings(file *os.File, reporters map[string]reporter.Reporter) {
+func reportClairFindings(file *os.File, repositoryTeams map[string]string, repositoryAssignees map[string]string, reporters map[string]reporter.Reporter) {
 	klarReport := clair.KlarReport{}
 	data, err := ioutil.ReadAll(file)
 	if err != nil {
