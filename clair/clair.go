@@ -19,4 +19,11 @@ type JiraTicket struct {
 	Package     string
 	Description string
 	DevTeam     string
+	Assignee    string
+}
+
+type TeamRepositories struct {
+	Repo     string `json:"repo"`
+	Team     string `json:"team"`
+	Assignee string `json:"assignee"`
 }

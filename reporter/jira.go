@@ -35,7 +35,7 @@ func init() {
 			username = flag.String("JIRA_USERNAME", "", "JIRA user to authenticate as")
 			token = flag.String("JIRA_TOKEN", "", "JIRA token for the user to authenticate")
 			// TODO: Turn this into a file-path argument to use a template file instead of string
-			fieldsConfiguration = flag.String("JIRA_FIELDS", "Project|CD;Issue Type|Story;Summary|Test Container Security Vulnerability: container name:{{ .failure.Repo }}, package name:{{ .failure.Package }};Description|{{ .failure.Description }};Component/s|Platform Security;Dev Team|{{ .failure.DevTeam }};Priority|P2;Severity|Sev-2;Vulnerability Report By|Clair;Labels|security_infrastructure", "JIRA fields in 'key|value;...' format seperated by ';', this configuration MUST contain 'Project', 'Summary' and 'Issue Type'")
+			fieldsConfiguration = flag.String("JIRA_FIELDS", "Project|CD;Issue Type|Story;Summary|Test Container Security Vulnerability: container name:{{ .failure.Repo }}, package name:{{ .failure.Package }};Description|{{ .failure.Description }};Component/s|Platform Security;Dev Team|{{ .failure.DevTeam }};Assignee|{{ .failure.Assignee }};Priority|P2;Severity|Sev-2;Vulnerability Report By|Clair;Labels|security_infrastructure", "JIRA fields in 'key|value;...' format seperated by ';', this configuration MUST contain 'Project', 'Summary' and 'Issue Type'")
 			closedStatus = flag.String("JIRA_ISSUE_CLOSED_STATUS", "Closed", "The status of JIRA issue when it is considered closed")
 		},
 
@@ -109,7 +109,6 @@ func (j *jiraReporter) Report(report clair.JiraTicket) error {
 		if err != nil {
 			return fmt.Errorf("rendering value of %s as template failed: %s", field, err)
 		}
-		fmt.Printf("field: %s \n rendered: %s \n", field, rendered)
 		renderedFields[field] = rendered
 	}
 
@@ -131,7 +130,17 @@ func (j *jiraReporter) Report(report clair.JiraTicket) error {
 		return fmt.Errorf("could not initialize issue: %s", err)
 	}
 
-	_, resp, err = j.client.Issue.Create(issue)
+	issue, resp, err = j.client.Issue.Create(issue)
+	if err != nil {
+		return fmt.Errorf(readJiraReponse(resp))
+	}
+
+	user, resp, err := j.client.User.Get(report.Assignee)
+	if err != nil {
+		return fmt.Errorf(readJiraReponse(resp))
+	}
+
+	resp, err = j.client.Issue.UpdateAssignee(issue.ID, user)
 	if err != nil {
 		return fmt.Errorf(readJiraReponse(resp))
 	}

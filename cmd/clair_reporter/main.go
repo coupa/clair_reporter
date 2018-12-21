@@ -22,30 +22,6 @@ func init() {
 	reporter.RegisterFlags()
 }
 
-func loadTeamConfig() (map[string]string, map[string]string, error) {
-	if teamConfigFilePath == "" {
-		return nil, nil, fmt.Errorf("missing path to JSON file, pass --team-path <path to json file>")
-	}
-	teamConfigFile, err := os.Open(teamConfigFilePath)
-	if err != nil {
-		return nil, nil, fmt.Errorf("cannot open file:%s err:%s", teamConfigFilePath, err)
-	}
-	var teamRepositories []struct {
-		Repo     string `json:"repo"`
-		Team     string `json:"team"`
-		Assignee string `json:"assignee"`
-	}
-	jsonDecoder := json.NewDecoder(teamConfigFile)
-	jsonDecoder.Decode(&teamRepositories)
-	repositoryTeams := make(map[string]string)
-	repositoryAssignees := make(map[string]string)
-	for _, tr := range teamRepositories {
-		repositoryTeams[tr.Repo] = tr.Team
-		repositoryAssignees[tr.Repo] = tr.Assignee
-	}
-	return repositoryTeams, repositoryAssignees, nil
-}
-
 func main() {
 	flag.Parse()
 	fmt.Println(f)
@@ -71,7 +47,7 @@ func main() {
 	reportClairFindings(file, repositoryTeams, repositoryAssignees, reporters)
 }
 
-func reportClairFindings(file *os.File, repositoryTeams map[string]string, repositoryAssignees map[string]string, reporters map[string]reporter.Reporter) {
+func reportClairFindings(file *os.File, repositoryTeams, repositoryAssignees map[string]string, reporters map[string]reporter.Reporter) {
 	klarReport := clair.KlarReport{}
 	data, err := ioutil.ReadAll(file)
 	if err != nil {
@@ -91,11 +67,43 @@ func reportClairFindings(file *os.File, repositoryTeams map[string]string, repos
 			jiraTicket.Repo = repo
 			jiraTicket.Package = pkg
 			jiraTicket.Description = featuresToJSON(vuln)
+			jiraTicket.DevTeam = repositoryTeams[repo]
+			jiraTicket.Assignee = repositoryAssignees[repo]
 			if err := r.Report(jiraTicket); err != nil {
 				log.Printf("Cannot generate report with %s: %s", n, err)
 			}
 		}
 	}
+}
+
+func loadTeamConfig() (map[string]string, map[string]string, error) {
+	if teamConfigFilePath == "" {
+		return nil, nil, fmt.Errorf("missing path to JSON file, pass --team-path <path to json file>")
+	}
+	teamConfigFile, err := os.Open(teamConfigFilePath)
+	if err != nil {
+		return nil, nil, fmt.Errorf("cannot open file:%s err:%s", teamConfigFilePath, err)
+	}
+	defer teamConfigFile.Close()
+
+	teamRepositories := []*clair.TeamRepositories{}
+	data, err := ioutil.ReadAll(teamConfigFile)
+	if err != nil {
+		log.Printf("Cannot read json file: %s", err)
+	}
+
+	json.Unmarshal(data, &teamRepositories)
+	if err != nil {
+		log.Printf("Cannot deserialize json: %s", err)
+	}
+
+	repositoryTeams := make(map[string]string)
+	repositoryAssignees := make(map[string]string)
+	for _, tr := range teamRepositories {
+		repositoryTeams[tr.Repo] = tr.Team
+		repositoryAssignees[tr.Repo] = tr.Assignee
+	}
+	return repositoryTeams, repositoryAssignees, nil
 }
 
 func featuresToJSON(features []*clair.Feature) string {
@@ -108,7 +116,7 @@ func featuresToJSON(features []*clair.Feature) string {
 		}
 		featuresJSON = append(featuresJSON, string(tmpstring))
 	}
-	output = strings.Join(featuresJSON, "\n")
+	output = strings.Join(featuresJSON, "\\\\")
 	return output
 }
 
