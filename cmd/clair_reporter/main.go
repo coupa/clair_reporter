@@ -66,9 +66,21 @@ func reportClairFindings(file *os.File, repositoryTeams, repositoryAssignees map
 			repo := strings.SplitN(klarReport.Repo, "/", 2)[1]
 			jiraTicket.Repo = repo
 			jiraTicket.Package = pkg
+			priority := "P2"
+			severity := "Sev-2"
+			for _, feature := range vuln {
+				if feature.Severity == "Critical" ||
+					feature.Severity == "Defcon1" {
+					priority = "P1"
+					severity = "Sev-1"
+					break
+				}
+			}
 			jiraTicket.Description = featuresToJSON(vuln)
 			jiraTicket.DevTeam = repositoryTeams[repo]
 			jiraTicket.Assignee = repositoryAssignees[repo]
+			jiraTicket.Priority = priority
+			jiraTicket.Severity = severity
 			if err := r.Report(jiraTicket); err != nil {
 				log.Printf("Cannot generate report with %s: %s", n, err)
 			}
