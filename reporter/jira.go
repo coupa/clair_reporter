@@ -35,7 +35,7 @@ func init() {
 			username = flag.String("JIRA_USERNAME", "", "JIRA user to authenticate as")
 			token = flag.String("JIRA_TOKEN", "", "JIRA token for the user to authenticate")
 			// TODO: Turn this into a file-path argument to use a template file instead of string
-			fieldsConfiguration = flag.String("JIRA_FIELDS", "Project|CD;Issue Type|Bug;Summary|Container Security Vulnerability: container name:{{ .failure.Repo }}, package name:{{ .failure.Package }};Description|{{ .failure.Description }};Component/s|Platform Security;Dev Team|{{ .failure.DevTeam }};Assignee|{{ .failure.Assignee }};Priority|{{ .failure.Priority }};Severity|{{ .failure.Severity }};Vulnerability Report By|Clair;Labels|security_infrastructure", "JIRA fields in 'key|value;...' format seperated by ';', this configuration MUST contain 'Project', 'Summary' and 'Issue Type'")
+			fieldsConfiguration = flag.String("JIRA_FIELDS", "Project|CD;Issue Type|Bug;Summary|Container Security Vulnerability: container name:{{ .failure.Repo }}, package name:{{ .failure.Package }};Description|{{ .failure.Description }};Component/s|Platform Security;Dev Team|{{ .failure.DevTeam }};Priority|{{ .failure.Priority }};Severity|{{ .failure.Severity }};Regression|Needs Analysis;Vulnerability Report By|Clair;Labels|security_infrastructure;Found During|Security Testing", "JIRA fields in 'key|value;...' format seperated by ';', this configuration MUST contain 'Project', 'Summary' and 'Issue Type'")
 			closedStatus = flag.String("JIRA_ISSUE_CLOSED_STATUS", "Closed", "The status of JIRA issue when it is considered closed")
 		},
 
@@ -91,10 +91,12 @@ func newJiraReporter(jiraURL, username, token, fieldsConfiguration, closedStatus
 	}
 
 	// check if the given fields completes the mandatory fields and all listed fields are available
-	complete, err := metaIssuetype.CheckCompleteAndAvailable(reporter.fieldsConfig)
-	if !complete {
-		return nil, err
-	}
+	// XXX - note that this is broken and needs to take into account display names and aliases
+	// See Affects Version/s and versions as an alias
+	//complete, err := metaIssuetype.CheckCompleteAndAvailable(reporter.fieldsConfig)
+	//if !complete {
+	//	return nil, err
+	//}
 
 	reporter.metaIssuetype = metaIssuetype
 	return reporter, nil
@@ -130,6 +132,8 @@ func (j *jiraReporter) Report(report clair.JiraTicket) error {
 		return fmt.Errorf("could not initialize issue: %s", err)
 	}
 
+	versions := []map[string]string{map[string]string{"name": "master"}}
+	issue.Fields.Unknowns.Set("versions", versions)
 	issue, resp, err = j.client.Issue.Create(issue)
 	if err != nil {
 		return fmt.Errorf(readJiraReponse(resp))
