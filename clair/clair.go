@@ -20,6 +20,9 @@ type JiraTicket struct {
 	Description string
 	DevTeam     string
 	Assignee    string
+	Priority    string
+	Severity    string
+	Version     string
 }
 
 type TeamRepositories struct {
