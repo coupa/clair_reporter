@@ -22,6 +22,7 @@ type JiraTicket struct {
 	Assignee    string
 	Priority    string
 	Severity    string
+	Version     string
 }
 
 type TeamRepositories struct {

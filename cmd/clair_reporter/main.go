@@ -13,19 +13,27 @@ import (
 	"clair_reporter/reporter"
 )
 
-var f string
-var teamConfigFilePath string
+var (
+	jsonVulnerabilityReportFilePath string
+	teamConfigFilePath              string
+	defaultTeam                     string
+	defaultAssignee                 string
+	defaultVersion                  string
+)
 
 func init() {
-	flag.StringVar(&f, "file-path", "", "path to the JSON report from klar")
+	flag.StringVar(&jsonVulnerabilityReportFilePath, "file-path", "", "path to the JSON report from klar")
 	flag.StringVar(&teamConfigFilePath, "team-path", "", "path to the JSON repository-team mapping")
+	flag.StringVar(&defaultTeam, "default-team", "Review", "default team to assign tickets")
+	flag.StringVar(&defaultAssignee, "default-assignee", "", "default assignee for tickets")
+	flag.StringVar(&defaultVersion, "default-version", "master", "default version for ticket")
 	reporter.RegisterFlags()
 }
 
 func main() {
 	flag.Parse()
-	fmt.Println(f)
-	if f == "" {
+	fmt.Println(jsonVulnerabilityReportFilePath)
+	if jsonVulnerabilityReportFilePath == "" {
 		log.Fatalf("You must specify a path to the JSON file, pass --file-path <path to json file>")
 		os.Exit(1)
 	}
@@ -38,9 +46,9 @@ func main() {
 		log.Fatalf("Cannot create requested reporters: %s", err)
 	}
 
-	file, err := os.Open(f)
+	file, err := os.Open(jsonVulnerabilityReportFilePath)
 	if err != nil {
-		log.Fatalf("Cannot open JSON file %s: %s", f, err)
+		log.Fatalf("Cannot open JSON file %s: %s", jsonVulnerabilityReportFilePath, err)
 	}
 	defer file.Close()
 
@@ -77,10 +85,19 @@ func reportClairFindings(file *os.File, repositoryTeams, repositoryAssignees map
 				}
 			}
 			jiraTicket.Description = featuresToJSON(vuln)
-			jiraTicket.DevTeam = repositoryTeams[repo]
-			jiraTicket.Assignee = repositoryAssignees[repo]
+			devTeam := repositoryTeams[repo]
+			if devTeam == "" {
+				devTeam = defaultTeam
+			}
+			devAssignee := repositoryAssignees[repo]
+			if devAssignee == "" {
+				devAssignee = defaultAssignee
+			}
+			jiraTicket.DevTeam = devTeam
+			jiraTicket.Assignee = devAssignee
 			jiraTicket.Priority = priority
 			jiraTicket.Severity = severity
+			jiraTicket.Version = defaultVersion
 			if err := r.Report(jiraTicket); err != nil {
 				log.Printf("Cannot generate report with %s: %s", n, err)
 			}
